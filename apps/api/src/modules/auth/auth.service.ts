@@ -288,6 +288,22 @@ export class AuthService {
     });
   }
 
+  /**
+   * Generate access + refresh tokens for a user directly (e.g., after Google OAuth).
+   */
+  async generateTokensForUser(
+    user: { id: string; email: string; role: string },
+    ip?: string,
+    userAgent?: string,
+  ) {
+    const tokens = await this.generateTokenPair(user, ip, userAgent);
+    return {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      user: this.sanitizeUser(user as any),
+    };
+  }
+
   // ─── Private helpers ───────────────────────────────
 
   private async generateTokenPair(

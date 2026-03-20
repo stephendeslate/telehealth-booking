@@ -232,4 +232,70 @@ export async function createTestSlotReservation(
   });
 }
 
+export async function createTestPaymentRecord(
+  prisma: PrismaService,
+  opts: {
+    practiceId: string;
+    appointmentId: string;
+    amount?: number;
+    currency?: string;
+    status?: string;
+  },
+) {
+  return prisma.paymentRecord.create({
+    data: {
+      practice_id: opts.practiceId,
+      appointment_id: opts.appointmentId,
+      amount: opts.amount ?? 100,
+      currency: opts.currency || 'USD',
+      status: (opts.status || 'SUCCEEDED') as any,
+      stripe_payment_intent_id: `pi_mock_${randomBytes(12).toString('hex')}`,
+      platform_fee: Math.round((opts.amount ?? 100) * 1) / 100,
+    },
+  });
+}
+
+export async function createTestVideoRoom(
+  prisma: PrismaService,
+  opts: {
+    practiceId: string;
+    appointmentId: string;
+    status?: string;
+  },
+) {
+  return prisma.videoRoom.create({
+    data: {
+      practice_id: opts.practiceId,
+      appointment_id: opts.appointmentId,
+      twilio_room_sid: `RM_mock_${randomBytes(12).toString('hex')}`,
+      twilio_room_name: `appt_${opts.appointmentId.replace(/-/g, '')}`,
+      status: (opts.status || 'CREATED') as any,
+      max_participants: 2,
+    },
+  });
+}
+
+export async function createTestCalendarConnection(
+  prisma: PrismaService,
+  opts: {
+    practiceId: string;
+    providerProfileId: string;
+    provider?: string;
+    status?: string;
+  },
+) {
+  return prisma.calendarConnection.create({
+    data: {
+      practice_id: opts.practiceId,
+      provider_profile_id: opts.providerProfileId,
+      provider: (opts.provider || 'GOOGLE') as any,
+      status: (opts.status || 'ACTIVE') as any,
+      calendar_id: `mock_cal_${randomBytes(8).toString('hex')}`,
+      access_token: 'mock_access_token',
+      refresh_token: 'mock_refresh_token',
+      token_expires_at: new Date(Date.now() + 3600 * 1000),
+    },
+  });
+}
+
 export { DEFAULT_PASSWORD };

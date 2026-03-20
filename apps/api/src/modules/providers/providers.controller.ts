@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProvidersService } from './providers.service';
 import { PracticeRolesGuard } from '../../common/guards/practice-roles.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -28,18 +29,22 @@ import type {
 } from '@medconnect/shared';
 import type { JwtPayload } from '../auth/auth.service';
 
+@ApiTags('providers')
+@ApiBearerAuth('JWT')
 @Controller('practices/:practiceId/providers')
 @UseGuards(PracticeRolesGuard)
 export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Get()
+  @ApiOperation({ summary: 'List providers in a practice' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async list(@Param('practiceId') practiceId: string) {
     return this.providersService.listProviders(practiceId);
   }
 
   @Get(':profileId')
+  @ApiOperation({ summary: 'Get provider profile' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async getProfile(
     @Param('practiceId') practiceId: string,
@@ -49,6 +54,7 @@ export class ProvidersController {
   }
 
   @Patch(':profileId')
+  @ApiOperation({ summary: 'Update provider profile' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async updateProfile(
     @Param('practiceId') practiceId: string,
@@ -60,6 +66,7 @@ export class ProvidersController {
   }
 
   @Delete(':profileId')
+  @ApiOperation({ summary: 'Deactivate a provider' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async deactivate(
     @Param('practiceId') practiceId: string,
@@ -72,6 +79,7 @@ export class ProvidersController {
   // ─── Invitations ────────────────────────────
 
   @Post('invite')
+  @ApiOperation({ summary: 'Invite a new provider' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async invite(
     @Param('practiceId') practiceId: string,
@@ -82,12 +90,14 @@ export class ProvidersController {
   }
 
   @Get('invitations/list')
+  @ApiOperation({ summary: 'List pending invitations' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async listInvitations(@Param('practiceId') practiceId: string) {
     return this.providersService.listInvitations(practiceId);
   }
 
   @Delete('invitations/:invitationId')
+  @ApiOperation({ summary: 'Revoke a provider invitation' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async revokeInvitation(
     @Param('practiceId') practiceId: string,
@@ -100,6 +110,7 @@ export class ProvidersController {
   // ─── Availability Rules ────────────────────
 
   @Get(':profileId/availability')
+  @ApiOperation({ summary: 'Get provider availability rules' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async getAvailability(
     @Param('practiceId') practiceId: string,
@@ -109,6 +120,7 @@ export class ProvidersController {
   }
 
   @Post(':profileId/availability')
+  @ApiOperation({ summary: 'Set provider availability rules' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async setAvailability(
     @Param('practiceId') practiceId: string,
@@ -121,6 +133,7 @@ export class ProvidersController {
   // ─── Blocked Dates ─────────────────────────
 
   @Get(':profileId/blocked-dates')
+  @ApiOperation({ summary: 'Get provider blocked dates' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async getBlockedDates(
     @Param('practiceId') practiceId: string,
@@ -130,6 +143,7 @@ export class ProvidersController {
   }
 
   @Post(':profileId/blocked-dates')
+  @ApiOperation({ summary: 'Add provider blocked dates' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async addBlockedDates(
     @Param('practiceId') practiceId: string,
@@ -140,6 +154,7 @@ export class ProvidersController {
   }
 
   @Delete('blocked-dates/:blockedDateId')
+  @ApiOperation({ summary: 'Remove a blocked date' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async removeBlockedDate(
     @Param('practiceId') practiceId: string,
@@ -150,12 +165,14 @@ export class ProvidersController {
 }
 
 // Separate controller for public invitation verification (no auth needed)
+@ApiTags('providers')
 @Controller('invitations')
 export class InvitationsController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Public()
   @Get('verify/:token')
+  @ApiOperation({ summary: 'Verify invitation token' })
   async verify(@Param('token') token: string) {
     return this.providersService.verifyInvitation(token);
   }

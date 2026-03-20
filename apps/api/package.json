@@ -45,10 +45,17 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "socket.io": "^4.8.3",
-    "zod": "^3.24.0"
+    "@nestjs/swagger": "^11.0.0",
+    "zod": "^3.24.0",
+    "resend": "^4.0.0",
+    "stripe": "^17.0.0",
+    "twilio": "^5.0.0",
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "@sentry/nestjs": "^9.0.0",
+    "@nestjs/bullmq": "^11.0.4"
   },
   "devDependencies": {
-    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",

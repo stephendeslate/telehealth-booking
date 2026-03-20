@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PracticesService } from './practices.service';
 import { PracticeRolesGuard } from '../../common/guards/practice-roles.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,11 +27,14 @@ import type {
 } from '@medconnect/shared';
 import type { JwtPayload } from '../auth/auth.service';
 
+@ApiTags('practices')
+@ApiBearerAuth('JWT')
 @Controller('practices')
 export class PracticesController {
   constructor(private readonly practicesService: PracticesService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new practice' })
   async create(
     @Body(new ZodValidationPipe(createPracticeSchema)) dto: CreatePracticeDto,
     @CurrentUser() user: JwtPayload,
@@ -39,17 +43,20 @@ export class PracticesController {
   }
 
   @Get('mine')
+  @ApiOperation({ summary: 'List practices for current user' })
   async listMine(@CurrentUser() user: JwtPayload) {
     return this.practicesService.listForUser(user.sub);
   }
 
   @Public()
   @Get('public/:slug')
+  @ApiOperation({ summary: 'Get public practice profile by slug' })
   async getPublicProfile(@Param('slug') slug: string) {
     return this.practicesService.getPublicProfile(slug);
   }
 
   @Get(':practiceId')
+  @ApiOperation({ summary: 'Get practice by ID' })
   @UseGuards(PracticeRolesGuard)
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async findById(@Param('practiceId') id: string) {
@@ -57,6 +64,7 @@ export class PracticesController {
   }
 
   @Patch(':practiceId')
+  @ApiOperation({ summary: 'Update practice details' })
   @UseGuards(PracticeRolesGuard)
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async update(
@@ -68,6 +76,7 @@ export class PracticesController {
   }
 
   @Patch(':practiceId/settings')
+  @ApiOperation({ summary: 'Update practice settings' })
   @UseGuards(PracticeRolesGuard)
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async updateSettings(

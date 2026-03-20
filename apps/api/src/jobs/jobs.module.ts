@@ -10,9 +10,12 @@ import { VideoProcessor } from './processors/video.processor';
 import { CalendarProcessor } from './processors/calendar.processor';
 import { ExportsProcessor } from './processors/exports.processor';
 import { UploadsProcessor } from './processors/uploads.processor';
+import { VideoModule } from '../modules/video/video.module';
+import { CalendarModule } from '../modules/calendar/calendar.module';
+import { UploadsModule } from '../modules/uploads/uploads.module';
 
 @Module({
-  imports: [QueueModule],
+  imports: [QueueModule, VideoModule, CalendarModule, UploadsModule],
   providers: [
     EmailService,
     RecurringJobsService,

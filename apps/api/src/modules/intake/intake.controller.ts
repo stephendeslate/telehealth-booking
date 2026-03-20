@@ -8,6 +8,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IntakeService } from './intake.service';
 import { PracticeRolesGuard } from '../../common/guards/practice-roles.guard';
 import { ParticipantGuard } from '../../common/guards/participant.guard';
@@ -28,12 +29,15 @@ import type {
 import type { JwtPayload } from '../auth/auth.service';
 
 // Template CRUD — practice-scoped, OWNER/ADMIN only
+@ApiTags('intake')
+@ApiBearerAuth('JWT')
 @Controller('practices/:practiceId/intake-templates')
 @UseGuards(PracticeRolesGuard)
 export class IntakeTemplateController {
   constructor(private readonly intakeService: IntakeService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create an intake template' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async create(
     @Param('practiceId') practiceId: string,
@@ -44,12 +48,14 @@ export class IntakeTemplateController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'List intake templates' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async list(@Param('practiceId') practiceId: string) {
     return this.intakeService.listTemplates(practiceId);
   }
 
   @Get(':templateId')
+  @ApiOperation({ summary: 'Get intake template by ID' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async findById(
     @Param('practiceId') practiceId: string,
@@ -59,6 +65,7 @@ export class IntakeTemplateController {
   }
 
   @Patch(':templateId')
+  @ApiOperation({ summary: 'Update an intake template' })
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async update(
     @Param('practiceId') practiceId: string,
@@ -72,12 +79,15 @@ export class IntakeTemplateController {
 
 // Intake submission — appointment-scoped (patient or practice member)
 // ParticipantGuard attaches appointment to request
+@ApiTags('intake')
+@ApiBearerAuth('JWT')
 @Controller('appointments/:appointmentId/intake')
 @UseGuards(ParticipantGuard)
 export class IntakeSubmissionController {
   constructor(private readonly intakeService: IntakeService) {}
 
   @Get()
+  @ApiOperation({ summary: 'Get intake submission for an appointment' })
   async getSubmission(
     @Param('appointmentId') appointmentId: string,
     @Req() req: any,
@@ -87,6 +97,7 @@ export class IntakeSubmissionController {
   }
 
   @Post()
+  @ApiOperation({ summary: 'Submit intake form for an appointment' })
   async submit(
     @Param('appointmentId') appointmentId: string,
     @Body(new ZodValidationPipe(submitIntakeSchema)) dto: SubmitIntakeDto,

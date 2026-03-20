@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AppointmentsService } from './appointments.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PracticeRolesGuard } from '../../common/guards/practice-roles.guard';
@@ -38,11 +39,13 @@ import type { Request } from 'express';
 
 // ─── Slot Reservation (public — guests can reserve) ──────────────
 
+@ApiTags('appointments')
 @Controller('practices/:practiceId/slots')
 export class SlotsController {
   constructor(private readonly appointments: AppointmentsService) {}
 
   @Post('reserve')
+  @ApiOperation({ summary: 'Reserve a time slot' })
   @Public()
   async reserve(
     @Param('practiceId') practiceId: string,
@@ -54,11 +57,14 @@ export class SlotsController {
 
 // ─── Appointments (mixed auth) ──────────────────────────────────
 
+@ApiTags('appointments')
+@ApiBearerAuth('JWT')
 @Controller('practices/:practiceId/appointments')
 export class AppointmentsController {
   constructor(private readonly appointments: AppointmentsService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new appointment' })
   @Public()
   async create(
     @Param('practiceId') practiceId: string,
@@ -75,6 +81,7 @@ export class AppointmentsController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'List appointments for a practice' })
   @UseGuards(PracticeRolesGuard)
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.PROVIDER)
   async list(
@@ -86,12 +93,14 @@ export class AppointmentsController {
   }
 
   @Get(':appointmentId')
+  @ApiOperation({ summary: 'Get appointment by ID' })
   @UseGuards(ParticipantGuard)
   async findById(@Param('appointmentId') appointmentId: string) {
     return this.appointments.findById(appointmentId);
   }
 
   @Post(':appointmentId/confirm')
+  @ApiOperation({ summary: 'Confirm a pending appointment' })
   @UseGuards(PracticeRolesGuard)
   @PracticeRoles(MembershipRole.OWNER, MembershipRole.ADMIN)
   async confirm(
@@ -102,6 +111,7 @@ export class AppointmentsController {
   }
 
   @Post(':appointmentId/cancel')
+  @ApiOperation({ summary: 'Cancel an appointment' })
   @UseGuards(ParticipantGuard)
   async cancel(
     @Param('appointmentId') appointmentId: string,
@@ -112,6 +122,7 @@ export class AppointmentsController {
   }
 
   @Post(':appointmentId/reschedule')
+  @ApiOperation({ summary: 'Reschedule an appointment' })
   @UseGuards(ParticipantGuard)
   async reschedule(
     @Param('appointmentId') appointmentId: string,
@@ -122,6 +133,7 @@ export class AppointmentsController {
   }
 
   @Patch(':appointmentId/notes')
+  @ApiOperation({ summary: 'Update appointment notes' })
   @UseGuards(ParticipantGuard)
   async updateNotes(
     @Param('appointmentId') appointmentId: string,
@@ -133,12 +145,15 @@ export class AppointmentsController {
 
 // ─── Patient Appointments (user-scoped) ──────────────────────────
 
+@ApiTags('appointments')
+@ApiBearerAuth('JWT')
 @Controller('me/appointments')
 @UseGuards(JwtAuthGuard)
 export class PatientAppointmentsController {
   constructor(private readonly appointments: AppointmentsService) {}
 
   @Get()
+  @ApiOperation({ summary: 'List my appointments' })
   async list(
     @CurrentUser('sub') userId: string,
     @Query(new ZodValidationPipe(appointmentListQuerySchema))

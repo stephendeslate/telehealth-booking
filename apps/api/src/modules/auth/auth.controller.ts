@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -33,12 +34,15 @@ import {
   type ChangePasswordDto,
 } from '@medconnect/shared';
 
+@ApiTags('auth')
+@ApiBearerAuth('JWT')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('register')
+  @ApiOperation({ summary: 'Register a new user account' })
   @Throttle({ default: { limit: RATE_LIMITS.auth.limit, ttl: RATE_LIMITS.auth.ttl * 1000 } })
   async register(
     @Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto,
@@ -61,6 +65,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @ApiOperation({ summary: 'Log in with email and password' })
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: RATE_LIMITS.auth.limit, ttl: RATE_LIMITS.auth.ttl * 1000 } })
   async login(
@@ -84,6 +89,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @ApiOperation({ summary: 'Refresh access token' })
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Body(new ZodValidationPipe(refreshTokenSchema)) body: { refresh_token?: string },
@@ -116,6 +122,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @ApiOperation({ summary: 'Log out and invalidate refresh token' })
   @HttpCode(HttpStatus.OK)
   async logout(
     @Req() req: Request,
@@ -134,6 +141,7 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email address with token' })
   @HttpCode(HttpStatus.OK)
   async verifyEmail(
     @Body(new ZodValidationPipe(verifyEmailSchema)) dto: VerifyEmailDto,
@@ -143,6 +151,7 @@ export class AuthController {
 
   @Public()
   @Post('forgot-password')
+  @ApiOperation({ summary: 'Request a password reset email' })
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: RATE_LIMITS.password_reset.limit, ttl: RATE_LIMITS.password_reset.ttl * 1000 } })
   async forgotPassword(
@@ -153,6 +162,7 @@ export class AuthController {
 
   @Public()
   @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password with token' })
   @HttpCode(HttpStatus.OK)
   async resetPassword(
     @Body(new ZodValidationPipe(resetPasswordSchema)) dto: ResetPasswordDto,
@@ -161,6 +171,7 @@ export class AuthController {
   }
 
   @Post('change-password')
+  @ApiOperation({ summary: 'Change password (authenticated)' })
   @HttpCode(HttpStatus.OK)
   async changePassword(
     @CurrentUser('sub') userId: string,
@@ -170,6 +181,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @ApiOperation({ summary: 'Get current user profile' })
   async me(@CurrentUser('sub') userId: string) {
     const user = await this.authService.getUserById(userId);
     if (!user) {
@@ -191,6 +203,7 @@ export class AuthController {
 
   @Public()
   @Get('google')
+  @ApiOperation({ summary: 'Initiate Google OAuth flow' })
   googleAuth(@Res() res: Response) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -204,6 +217,7 @@ export class AuthController {
 
   @Public()
   @Get('google/callback')
+  @ApiOperation({ summary: 'Google OAuth callback' })
   async googleCallback(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -221,29 +235,49 @@ export class AuthController {
         avatar_url: undefined,
       };
     } else {
-      // Real OAuth would exchange code for tokens here
-      // Stub for now — will be implemented in Phase 10
-      return res.status(501).json({ message: 'Real Google OAuth not configured' });
+      // Real Google OAuth: exchange code for tokens, then fetch user profile
+      const code = req.query.code as string;
+      if (!code) {
+        return res.status(400).json({ message: 'Missing authorization code' });
+      }
+
+      const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/auth/google/callback`;
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      const tokenData = await tokenRes.json();
+      if (!tokenRes.ok || !tokenData.access_token) {
+        return res.status(401).json({ message: 'Google OAuth token exchange failed' });
+      }
+
+      const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const userInfo = await userInfoRes.json();
+
+      profile = {
+        google_id: userInfo.id,
+        email: userInfo.email,
+        name: userInfo.name,
+        avatar_url: userInfo.picture,
+      };
     }
 
     const user = await this.authService.findOrCreateGoogleUser(profile);
-    const tokens = await this.authService.login(
-      { email: user.email, password: '' },
+    const tokens = await this.authService.generateTokensForUser(
+      user,
       req.ip,
       req.headers['user-agent'],
-    ).catch(async () => {
-      // User has no password (Google-only account), generate tokens directly
-      const { JwtService } = await import('@nestjs/jwt');
-      // Fallback: use the service's token generation
-      return null;
-    });
-
-    if (!tokens) {
-      // Generate tokens via a different path for Google-only users
-      // For MVP, redirect with a simple flow
-      const webUrl = process.env.WEB_URL || 'http://localhost:3000';
-      return res.redirect(`${webUrl}/auth/google-success?user=${user.id}`);
-    }
+    );
 
     this.setRefreshTokenCookie(res, tokens.refresh_token);
     const webUrl = process.env.WEB_URL || 'http://localhost:3000';

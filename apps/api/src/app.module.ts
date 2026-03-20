@@ -13,6 +13,12 @@ import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { IntakeModule } from './modules/intake/intake.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { VideoModule } from './modules/video/video.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
+import { UserModule } from './modules/user/user.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { JobsModule } from './jobs/jobs.module';
 import { HealthController } from './health.controller';
 import { RATE_LIMITS } from '@medconnect/shared';
@@ -38,6 +44,12 @@ import { RATE_LIMITS } from '@medconnect/shared';
     IntakeModule,
     NotificationsModule,
     MessagingModule,
+    VideoModule,
+    PaymentsModule,
+    CalendarModule,
+    UserModule,
+    AdminModule,
+    UploadsModule,
     JobsModule,
   ],
   controllers: [HealthController],
