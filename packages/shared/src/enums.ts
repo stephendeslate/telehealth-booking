@@ -58,6 +58,7 @@ export enum CalendarEventDirection {
 export enum CalendarConnectionStatus {
   ACTIVE = 'ACTIVE',
   DISCONNECTED = 'DISCONNECTED',
+  ERROR = 'ERROR',
 }
 
 export enum MessageType {
@@ -147,4 +148,21 @@ export enum UploadPurpose {
   AVATAR = 'avatar',
   PRACTICE_LOGO = 'practice_logo',
   PRACTICE_COVER = 'practice_cover',
+}
+
+export enum DayOfWeek {
+  SUNDAY = 0,
+  MONDAY = 1,
+  TUESDAY = 2,
+  WEDNESDAY = 3,
+  THURSDAY = 4,
+  FRIDAY = 5,
+  SATURDAY = 6,
+}
+
+export enum InvitationStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REVOKED = 'REVOKED',
+  EXPIRED = 'EXPIRED',
 }

@@ -7,9 +7,11 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { getJwtKeyPair } from './jwt-keys';
+import { JobsModule } from '../../jobs/jobs.module';
 
 @Module({
   imports: [
+    JobsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       privateKey: getJwtKeyPair().privateKey,

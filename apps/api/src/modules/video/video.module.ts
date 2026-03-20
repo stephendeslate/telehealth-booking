@@ -4,6 +4,7 @@ import { VideoController, TwilioWebhookController } from './video.controller';
 import { MockVideoProvider } from './mock-video.provider';
 import { TwilioVideoProvider } from './twilio-video.provider';
 import { VIDEO_PROVIDER } from './video-provider.interface';
+import { MessagingModule } from '../messaging/messaging.module';
 
 const useTwilio = !!(
   process.env.TWILIO_ACCOUNT_SID &&
@@ -12,6 +13,7 @@ const useTwilio = !!(
 );
 
 @Module({
+  imports: [MessagingModule],
   controllers: [VideoController, TwilioWebhookController],
   providers: [
     VideoService,

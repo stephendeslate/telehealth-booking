@@ -1,10 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotFoundError } from '../../common/errors/app-error';
 
 @Injectable()
-export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+export class NotificationsService implements OnModuleInit {
+  private gateway: { pushNotification(userId: string, notification: any): void } | null = null;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly moduleRef: ModuleRef,
+  ) {}
+
+  onModuleInit() {
+    // Lazy-resolve MessagingGateway to avoid circular dependency
+    try {
+      // Dynamic import to avoid circular module dependency
+      const { MessagingGateway } = require('../messaging/messaging.gateway');
+      this.gateway = this.moduleRef.get(MessagingGateway, { strict: false });
+    } catch {
+      // Gateway not available (e.g., in tests) — notifications will be DB-only
+    }
+  }
 
   async list(userId: string, options: { unread_only?: boolean; page?: number; limit?: number }) {
     const { unread_only = false, page = 1, limit = 20 } = options;
@@ -71,6 +88,13 @@ export class NotificationsService {
     body: string;
     data?: any;
   }) {
-    return this.prisma.notification.create({ data });
+    const notification = await this.prisma.notification.create({ data });
+
+    // Push via WebSocket if gateway is available
+    if (this.gateway) {
+      this.gateway.pushNotification(data.user_id, notification);
+    }
+
+    return notification;
   }
 }

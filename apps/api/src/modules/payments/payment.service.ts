@@ -352,7 +352,7 @@ export class PaymentService implements OnModuleInit {
   async updatePaymentStatus(paymentId: string, status: string) {
     return this.prisma.paymentRecord.update({
       where: { id: paymentId },
-      data: { status },
+      data: { status: status as any },
     });
   }
 

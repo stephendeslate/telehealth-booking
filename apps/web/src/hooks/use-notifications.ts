@@ -33,7 +33,7 @@ export function useNotifications() {
   }, [notifications]);
 
   useEffect(() => {
-    const cleanup = on('notification', () => {
+    const cleanup = on('notification:new', () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
     return cleanup;

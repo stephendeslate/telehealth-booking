@@ -22,7 +22,7 @@ export class TwilioVideoProvider implements VideoProvider {
   private async getClient() {
     if (!this.twilioClient) {
       const twilio = await import('twilio');
-      this.twilioClient = twilio.default(this.accountSid, process.env.TWILIO_AUTH_TOKEN);
+      this.twilioClient = twilio.default(this.accountSid, process.env.TWILIO_AUTH_TOKEN!);
     }
     return this.twilioClient;
   }

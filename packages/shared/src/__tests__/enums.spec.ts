@@ -70,8 +70,8 @@ describe('Enums', () => {
     expect(Object.values(CalendarEventDirection)).toHaveLength(2);
   });
 
-  it('CalendarConnectionStatus has exactly 2 values', () => {
-    expect(Object.values(CalendarConnectionStatus)).toHaveLength(2);
+  it('CalendarConnectionStatus has exactly 3 values', () => {
+    expect(Object.values(CalendarConnectionStatus)).toHaveLength(3);
   });
 
   it('MessageType has exactly 2 values', () => {

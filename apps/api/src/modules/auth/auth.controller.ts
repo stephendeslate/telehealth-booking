@@ -254,7 +254,7 @@ export class AuthController {
         }),
       });
 
-      const tokenData = await tokenRes.json();
+      const tokenData: any = await tokenRes.json();
       if (!tokenRes.ok || !tokenData.access_token) {
         return res.status(401).json({ message: 'Google OAuth token exchange failed' });
       }
@@ -262,7 +262,7 @@ export class AuthController {
       const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
-      const userInfo = await userInfoRes.json();
+      const userInfo: any = await userInfoRes.json();
 
       profile = {
         google_id: userInfo.id,

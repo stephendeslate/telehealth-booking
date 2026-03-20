@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit/audit.service';
@@ -124,6 +125,7 @@ beforeAll(async () => {
 
   module = await Test.createTestingModule({
     imports: [
+      ConfigModule.forRoot({ isGlobal: true }),
       EventEmitterModule.forRoot(),
       JwtModule.register({
         privateKey: keys.privateKey,

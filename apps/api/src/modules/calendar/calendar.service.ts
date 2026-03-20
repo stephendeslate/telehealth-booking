@@ -9,6 +9,7 @@ import { NotFoundError } from '../../common/errors/app-error';
 import {
   AuditAction,
   CalendarProvider,
+  CalendarConnectionStatus,
   QUEUES,
   JOB_DEFAULTS,
 } from '@medconnect/shared';
@@ -58,10 +59,12 @@ export class CalendarService {
     if (!this.encryptionKey) return ciphertext;
     const parts = ciphertext.split(':');
     if (parts.length !== 3) return ciphertext; // Not encrypted (legacy mock token)
-    const [ivHex, authTagHex, encryptedHex] = parts;
+    const ivHex = parts[0]!;
+    const authTagHex = parts[1]!;
+    const encryptedHex = parts[2]!;
     const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, Buffer.from(ivHex, 'hex'));
     decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    return decipher.update(Buffer.from(encryptedHex, 'hex')) + decipher.final('utf8');
+    return decipher.update(encryptedHex, 'hex', 'utf8') + decipher.final('utf8');
   }
 
   /**
@@ -99,7 +102,7 @@ export class CalendarService {
           grant_type: 'authorization_code',
         }),
       });
-      const tokenData = await tokenRes.json();
+      const tokenData: any = await tokenRes.json();
 
       if (!tokenRes.ok || !tokenData.access_token) {
         throw new Error('Google Calendar OAuth token exchange failed');
@@ -113,7 +116,7 @@ export class CalendarService {
       const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
-      const calData = await calRes.json();
+      const calData: any = await calRes.json();
       calendarId = calData.id || 'primary';
     } else {
       // Mock mode
@@ -253,7 +256,7 @@ export class CalendarService {
               grant_type: 'refresh_token',
             }),
           });
-          const tokenData = await tokenRes.json();
+          const tokenData: any = await tokenRes.json();
 
           if (tokenRes.ok && tokenData.access_token) {
             await this.prisma.calendarConnection.update({
@@ -268,7 +271,7 @@ export class CalendarService {
             this.logger.warn(`Failed to refresh token for connection ${conn.id}`);
             await this.prisma.calendarConnection.update({
               where: { id: conn.id },
-              data: { status: 'ERROR' },
+              data: { status: CalendarConnectionStatus.ERROR },
             });
           }
         } catch (err: any) {

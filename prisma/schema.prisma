@@ -69,6 +69,7 @@ enum CalendarEventDirection {
 enum CalendarConnectionStatus {
   ACTIVE
   DISCONNECTED
+  ERROR
 }
 
 enum MessageType {

@@ -1,6 +1,7 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { MessagingGateway } from '../messaging/messaging.gateway';
 import { NotFoundError, ForbiddenError } from '../../common/errors/app-error';
 import { VIDEO_PROVIDER, type VideoProvider } from './video-provider.interface';
 import { AuditAction, VIDEO_ROOM_HARD_LIMIT_MINUTES } from '@medconnect/shared';
@@ -13,6 +14,7 @@ export class VideoService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Inject(VIDEO_PROVIDER) private readonly videoProvider: VideoProvider,
+    @Optional() private readonly messagingGateway?: MessagingGateway,
   ) {}
 
   /**
@@ -163,6 +165,21 @@ export class VideoService {
       resource_id: room.id,
     });
 
+    // Push participant joined event via WebSocket
+    this.messagingGateway?.pushParticipantJoined(appointmentId, {
+      userId,
+      roomId: room.id,
+      joinedAt: new Date().toISOString(),
+    });
+
+    // Push room status update if it changed
+    if (room.status === 'CREATED') {
+      this.messagingGateway?.pushVideoStatus(appointmentId, {
+        roomId: room.id,
+        status: 'WAITING',
+      });
+    }
+
     return {
       token,
       room_name: roomName,
@@ -215,6 +232,14 @@ export class VideoService {
       resource_id: room.id,
     });
 
+    // Push room ended event via WebSocket
+    this.messagingGateway?.pushVideoStatus(appointmentId, {
+      roomId: room.id,
+      status: 'COMPLETED',
+      endedAt: now.toISOString(),
+      durationSeconds: durationSeconds,
+    });
+
     return updated;
   }
 
@@ -232,13 +257,21 @@ export class VideoService {
       return room;
     }
 
-    return this.prisma.videoRoom.update({
+    const updated = await this.prisma.videoRoom.update({
       where: { id: room.id },
       data: {
         status: 'IN_PROGRESS',
         started_at: new Date(),
       },
     });
+
+    this.messagingGateway?.pushVideoStatus(appointmentId, {
+      roomId: room.id,
+      status: 'IN_PROGRESS',
+      startedAt: updated.started_at?.toISOString(),
+    });
+
+    return updated;
   }
 
   /**

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { QueueModule } from './queue.module';
 import { EmailService } from './email.service';
+import { SmsService } from './sms.service';
 import { RecurringJobsService } from './recurring-jobs.service';
 import { AppointmentEventsHandler } from './appointment-events.handler';
 import { SchedulingProcessor } from './processors/scheduling.processor';
@@ -18,6 +19,7 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
   imports: [QueueModule, VideoModule, CalendarModule, UploadsModule],
   providers: [
     EmailService,
+    SmsService,
     RecurringJobsService,
     AppointmentEventsHandler,
     // Processors
@@ -29,6 +31,6 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     ExportsProcessor,
     UploadsProcessor,
   ],
-  exports: [EmailService],
+  exports: [EmailService, SmsService],
 })
 export class JobsModule {}

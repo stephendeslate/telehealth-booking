@@ -189,14 +189,13 @@ export class UploadService implements OnModuleInit {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        appointments: {
+        patient_appointments: {
           include: {
             service: { select: { name: true } },
             practice: { select: { name: true } },
-            intake_submission: true,
           },
         },
-        sent_messages: true,
+        messages: true,
         consent_records: true,
       },
     });
@@ -215,8 +214,8 @@ export class UploadService implements OnModuleInit {
         gender: user.gender,
         created_at: user.created_at,
       },
-      appointments: user.appointments,
-      messages: user.sent_messages,
+      appointments: user.patient_appointments,
+      messages: user.messages,
       consent_records: user.consent_records,
       exported_at: new Date().toISOString(),
     };

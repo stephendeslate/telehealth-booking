@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtModule, JwtService } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmailService } from '../../jobs/email.service';
 import { getJwtKeyPair } from './jwt-keys';
 import {
   createTestUser,
@@ -19,6 +21,7 @@ beforeAll(async () => {
 
   module = await Test.createTestingModule({
     imports: [
+      ConfigModule.forRoot({ isGlobal: true }),
       JwtModule.register({
         privateKey: keys.privateKey,
         publicKey: keys.publicKey,
@@ -26,7 +29,7 @@ beforeAll(async () => {
         verifyOptions: { algorithms: ['RS256'], issuer: 'medconnect' },
       }),
     ],
-    providers: [AuthService, PrismaService],
+    providers: [AuthService, PrismaService, EmailService],
   }).compile();
 
   authService = module.get(AuthService);

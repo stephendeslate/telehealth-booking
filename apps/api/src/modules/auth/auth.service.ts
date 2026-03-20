@@ -23,6 +23,9 @@ import type {
   ResetPasswordDto,
   ChangePasswordDto,
 } from '@medconnect/shared';
+import { EmailService } from '../../jobs/email.service';
+import { verifyEmailTemplate, passwordResetTemplate } from '../../jobs/email-templates';
+import { ConfigService } from '@nestjs/config';
 
 export interface JwtPayload {
   sub: string;
@@ -39,9 +42,16 @@ export interface RefreshPayload {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
+  private static readonly VERIFY_EMAIL_MARKER = '__email_verification__';
+  private static readonly RESET_PASSWORD_MARKER = '__password_reset__';
+  private static readonly VERIFY_TOKEN_EXPIRY_HOURS = 24;
+  private static readonly RESET_TOKEN_EXPIRY_HOURS = 1;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(dto: RegisterDto, ip?: string, userAgent?: string) {
@@ -70,15 +80,34 @@ export class AuthService {
       await this.acceptInvitation(dto.invitation_token, user.id);
     }
 
-    // Generate verification token (mock — log it)
+    // Generate and persist email verification token
     const verificationToken = randomBytes(32).toString('hex');
-    this.logger.log(
-      `[MOCK EMAIL] Verification link for ${user.email}: /verify-email?token=${verificationToken}`,
-    );
+    const verifyTokenHash = this.hashToken(verificationToken);
+    const verifyExpiry = new Date();
+    verifyExpiry.setHours(verifyExpiry.getHours() + AuthService.VERIFY_TOKEN_EXPIRY_HOURS);
 
-    // Store verification token hash in a simple way — reuse refresh_tokens table concept
-    // For simplicity, store as a special refresh token with a flag
-    // In practice, we'd have a separate table. For MVP, just auto-verify.
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: verifyTokenHash,
+        expires_at: verifyExpiry,
+        user_agent: AuthService.VERIFY_EMAIL_MARKER,
+      },
+    });
+
+    // Send verification email
+    const webUrl = this.config.get<string>('WEB_URL', 'http://localhost:3000');
+    const verifyUrl = `${webUrl}/verify-email?token=${verificationToken}`;
+    const emailContent = verifyEmailTemplate({
+      practiceName: 'MedConnect',
+      userName: user.name,
+      verifyUrl,
+    });
+    await this.emailService.send({
+      to: user.email,
+      subject: emailContent.subject,
+      html: emailContent.html,
+    });
 
     const tokens = await this.generateTokenPair(user, ip, userAgent);
 
@@ -180,9 +209,37 @@ export class AuthService {
   }
 
   async verifyEmail(token: string) {
-    // For MVP, we auto-verify on registration. This endpoint is a stub.
-    // In production, we'd look up the verification token and mark email_verified.
-    this.logger.log(`[MOCK] Email verification with token: ${token}`);
+    const tokenHash = this.hashToken(token);
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { token_hash: tokenHash },
+    });
+
+    if (!storedToken || storedToken.user_agent !== AuthService.VERIFY_EMAIL_MARKER) {
+      throw new UnauthorizedError('Invalid verification token');
+    }
+
+    if (storedToken.revoked_at) {
+      throw new UnauthorizedError('Verification token already used');
+    }
+
+    if (storedToken.expires_at < new Date()) {
+      throw new UnauthorizedError('Verification token has expired');
+    }
+
+    // Mark token as used and verify the user
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: { revoked_at: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: storedToken.user_id },
+        data: { email_verified: true },
+      }),
+    ]);
+
+    this.logger.log(`Email verified for user ${storedToken.user_id}`);
     return { message: 'Email verified successfully' };
   }
 
@@ -197,18 +254,87 @@ export class AuthService {
     }
 
     const resetToken = randomBytes(32).toString('hex');
-    this.logger.log(
-      `[MOCK EMAIL] Password reset for ${user.email}: /reset-password?token=${resetToken}`,
-    );
+    const resetTokenHash = this.hashToken(resetToken);
+    const resetExpiry = new Date();
+    resetExpiry.setHours(resetExpiry.getHours() + AuthService.RESET_TOKEN_EXPIRY_HOURS);
 
-    // In production, store reset token hash with expiry.
-    // For MVP, log it.
+    // Revoke any existing reset tokens for this user
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        user_id: user.id,
+        user_agent: AuthService.RESET_PASSWORD_MARKER,
+        revoked_at: null,
+      },
+      data: { revoked_at: new Date() },
+    });
+
+    await this.prisma.refreshToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: resetTokenHash,
+        expires_at: resetExpiry,
+        user_agent: AuthService.RESET_PASSWORD_MARKER,
+      },
+    });
+
+    const webUrl = this.config.get<string>('WEB_URL', 'http://localhost:3000');
+    const resetUrl = `${webUrl}/reset-password?token=${resetToken}`;
+    const emailContent = passwordResetTemplate({
+      practiceName: 'MedConnect',
+      userName: user.name,
+      resetUrl,
+    });
+    await this.emailService.send({
+      to: user.email,
+      subject: emailContent.subject,
+      html: emailContent.html,
+    });
+
     return { message: 'If an account exists, a reset link has been sent' };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    // For MVP, this is a stub. In production, we'd verify the reset token.
-    this.logger.log(`[MOCK] Password reset with token: ${dto.token}`);
+    const tokenHash = this.hashToken(dto.token);
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { token_hash: tokenHash },
+    });
+
+    if (!storedToken || storedToken.user_agent !== AuthService.RESET_PASSWORD_MARKER) {
+      throw new UnauthorizedError('Invalid reset token');
+    }
+
+    if (storedToken.revoked_at) {
+      throw new UnauthorizedError('Reset token already used');
+    }
+
+    if (storedToken.expires_at < new Date()) {
+      throw new UnauthorizedError('Reset token has expired');
+    }
+
+    const newHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction([
+      this.prisma.refreshToken.update({
+        where: { id: storedToken.id },
+        data: { revoked_at: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: storedToken.user_id },
+        data: { password_hash: newHash },
+      }),
+      // Revoke all refresh tokens for security
+      this.prisma.refreshToken.updateMany({
+        where: {
+          user_id: storedToken.user_id,
+          revoked_at: null,
+          user_agent: null, // Only actual refresh tokens, not verification markers
+        },
+        data: { revoked_at: new Date() },
+      }),
+    ]);
+
+    this.logger.log(`Password reset completed for user ${storedToken.user_id}`);
     return { message: 'Password has been reset successfully' };
   }
 
