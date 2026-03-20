@@ -1,0 +1,601 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum UserRole {
+  PLATFORM_ADMIN
+  USER
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  PROVIDER
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ConsultationType {
+  VIDEO
+  IN_PERSON
+  PHONE
+  BOTH
+}
+
+enum VideoRoomStatus {
+  CREATED
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum ConfirmationMode {
+  AUTO_CONFIRM
+  MANUAL_APPROVAL
+}
+
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+enum CalendarEventDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum CalendarConnectionStatus {
+  ACTIVE
+  DISCONNECTED
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+}
+
+enum IntakeStatus {
+  PENDING
+  COMPLETED
+  NOT_REQUIRED
+}
+
+// ─── Tables ─────────────────────────────────────────────
+
+model Practice {
+  id                         String    @id @default(uuid()) @db.Uuid
+  name                       String    @db.VarChar(255)
+  slug                       String    @unique @db.VarChar(100)
+  description                String?   @db.Text
+  category                   String    @db.VarChar(50)
+  logo_url                   String?   @db.VarChar(500)
+  cover_photo_url            String?   @db.VarChar(500)
+  brand_color                String?   @db.VarChar(7)
+  timezone                   String    @default("America/New_York") @db.VarChar(50)
+  currency                   String    @default("USD") @db.VarChar(3)
+  country                    String    @default("US") @db.VarChar(2)
+  address                    Json?
+  contact_email              String?   @db.VarChar(255)
+  contact_phone              String?   @db.VarChar(20)
+  stripe_account_id          String?   @db.VarChar(255)
+  stripe_onboarded           Boolean   @default(false)
+  subscription_tier          String    @default("STARTER") @db.VarChar(20)
+  is_published               Boolean   @default(false)
+  default_cancellation_policy Json?
+  reminder_settings          Json      @default("{\"email_24h\": true, \"email_1h\": true, \"sms_1h\": false}")
+  created_at                 DateTime  @default(now()) @db.Timestamptz()
+  updated_at                 DateTime  @updatedAt @db.Timestamptz()
+
+  memberships            TenantMembership[]
+  invitation_tokens      InvitationToken[]
+  provider_profiles      ProviderProfile[]
+  services               Service[]
+  availability_rules     AvailabilityRule[]
+  blocked_dates          BlockedDate[]
+  appointments           Appointment[]
+  slot_reservations      SlotReservation[]
+  video_rooms            VideoRoom[]
+  intake_form_templates  IntakeFormTemplate[]
+  intake_submissions     IntakeSubmission[]
+  messages               Message[]
+  payment_records        PaymentRecord[]
+  calendar_connections   CalendarConnection[]
+  calendar_events        CalendarEvent[]
+  appointment_reminders  AppointmentReminder[]
+  audit_logs             AuditLog[]
+  notifications          Notification[]
+
+  @@map("practices")
+}
+
+model User {
+  id                       String    @id @default(uuid()) @db.Uuid
+  email                    String    @unique @db.VarChar(255)
+  password_hash            String?   @db.VarChar(255)
+  name                     String    @db.VarChar(255)
+  phone                    String?   @db.VarChar(20)
+  avatar_url               String?   @db.VarChar(500)
+  role                     UserRole  @default(USER)
+  email_verified           Boolean   @default(false)
+  google_id                String?   @unique @db.VarChar(255)
+  date_of_birth            DateTime? @db.Date
+  gender                   String?   @db.VarChar(20)
+  locale                   String    @default("en") @db.VarChar(10)
+  timezone                 String?   @db.VarChar(50)
+  notification_preferences Json      @default("{\"email\": true, \"sms\": false, \"push\": false}")
+  created_at               DateTime  @default(now()) @db.Timestamptz()
+  updated_at               DateTime  @updatedAt @db.Timestamptz()
+
+  memberships        TenantMembership[]
+  refresh_tokens     RefreshToken[]
+  provider_profiles  ProviderProfile[]
+  patient_appointments Appointment[] @relation("PatientAppointments")
+  cancelled_appointments Appointment[] @relation("CancelledByUser")
+  messages           Message[]
+  video_participants VideoParticipant[]
+  notifications      Notification[]
+  consent_records    ConsentRecord[]
+  audit_logs         AuditLog[]
+  invited_tokens     InvitationToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  user_id     String    @db.Uuid
+  token_hash  String    @unique @db.VarChar(64)
+  expires_at  DateTime  @db.Timestamptz()
+  revoked_at  DateTime? @db.Timestamptz()
+  replaced_by String?   @db.Uuid
+  ip_address  String?   @db.VarChar(45)
+  user_agent  String?   @db.Text
+  created_at  DateTime  @default(now()) @db.Timestamptz()
+
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  replacement  RefreshToken? @relation("TokenReplacement", fields: [replaced_by], references: [id])
+  replaced_from RefreshToken[] @relation("TokenReplacement")
+
+  @@index([user_id], name: "idx_refresh_tokens_user")
+  @@index([token_hash], name: "idx_refresh_tokens_hash")
+  @@map("refresh_tokens")
+}
+
+model TenantMembership {
+  id          String         @id @default(uuid()) @db.Uuid
+  practice_id String         @db.Uuid
+  user_id     String         @db.Uuid
+  role        MembershipRole
+  is_active   Boolean        @default(true)
+  created_at  DateTime       @default(now()) @db.Timestamptz()
+  updated_at  DateTime       @updatedAt @db.Timestamptz()
+
+  practice Practice @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([practice_id, user_id])
+  @@map("tenant_memberships")
+}
+
+model InvitationToken {
+  id          String         @id @default(uuid()) @db.Uuid
+  practice_id String         @db.Uuid
+  email       String         @db.VarChar(255)
+  role        MembershipRole @default(PROVIDER)
+  token_hash  String         @unique @db.VarChar(64)
+  invited_by  String         @db.Uuid
+  expires_at  DateTime       @db.Timestamptz()
+  accepted_at DateTime?      @db.Timestamptz()
+  revoked_at  DateTime?      @db.Timestamptz()
+  created_at  DateTime       @default(now()) @db.Timestamptz()
+
+  practice    Practice @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  invited_by_user User @relation(fields: [invited_by], references: [id])
+
+  @@index([token_hash], name: "idx_invitation_tokens_hash")
+  @@index([practice_id, email], name: "idx_invitation_tokens_practice_email")
+  @@map("invitation_tokens")
+}
+
+model ProviderProfile {
+  id                     String           @id @default(uuid()) @db.Uuid
+  practice_id            String           @db.Uuid
+  user_id                String           @db.Uuid
+  specialties            String[]         @default([])
+  credentials            String?          @db.VarChar(100)
+  bio                    String?          @db.Text
+  years_of_experience    Int?
+  education              String?          @db.Text
+  languages              String[]         @default(["English"])
+  accepting_new_patients Boolean          @default(true)
+  consultation_types     ConsultationType[] @default([VIDEO])
+  created_at             DateTime         @default(now()) @db.Timestamptz()
+  updated_at             DateTime         @updatedAt @db.Timestamptz()
+
+  practice           Practice           @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  service_providers   ServiceProvider[]
+  availability_rules AvailabilityRule[]
+  blocked_dates      BlockedDate[]
+  appointments       Appointment[]
+  slot_reservations  SlotReservation[]
+  calendar_connections CalendarConnection[]
+
+  @@unique([practice_id, user_id])
+  @@map("provider_profiles")
+}
+
+model Service {
+  id                     String           @id @default(uuid()) @db.Uuid
+  practice_id            String           @db.Uuid
+  name                   String           @db.VarChar(255)
+  description            String?          @db.Text
+  duration_minutes       Int
+  price                  Decimal          @default(0) @db.Decimal(10, 2)
+  consultation_type      ConsultationType @default(VIDEO)
+  confirmation_mode      ConfirmationMode @default(AUTO_CONFIRM)
+  intake_form_template_id String?         @db.Uuid
+  max_participants       Int              @default(2)
+  buffer_before_minutes  Int              @default(0)
+  buffer_after_minutes   Int              @default(0)
+  category               String?          @db.VarChar(100)
+  is_active              Boolean          @default(true)
+  sort_order             Int              @default(0)
+  created_at             DateTime         @default(now()) @db.Timestamptz()
+  updated_at             DateTime         @updatedAt @db.Timestamptz()
+
+  practice           Practice            @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  intake_form_template IntakeFormTemplate? @relation(fields: [intake_form_template_id], references: [id])
+  service_providers  ServiceProvider[]
+  appointments       Appointment[]
+
+  @@map("services")
+}
+
+model ServiceProvider {
+  id                  String   @id @default(uuid()) @db.Uuid
+  service_id          String   @db.Uuid
+  provider_profile_id String   @db.Uuid
+  created_at          DateTime @default(now()) @db.Timestamptz()
+
+  service          Service         @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([service_id, provider_profile_id])
+  @@map("service_providers")
+}
+
+model AvailabilityRule {
+  id                    String   @id @default(uuid()) @db.Uuid
+  practice_id           String   @db.Uuid
+  provider_profile_id   String   @db.Uuid
+  day_of_week           Int      @db.SmallInt
+  start_time            DateTime @db.Time()
+  end_time              DateTime @db.Time()
+  slot_duration_minutes Int
+  is_active             Boolean  @default(true)
+  created_at            DateTime @default(now()) @db.Timestamptz()
+  updated_at            DateTime @updatedAt @db.Timestamptz()
+
+  practice         Practice        @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("availability_rules")
+}
+
+model BlockedDate {
+  id                  String   @id @default(uuid()) @db.Uuid
+  practice_id         String   @db.Uuid
+  provider_profile_id String   @db.Uuid
+  start_date          DateTime @db.Date
+  end_date            DateTime @db.Date
+  reason              String?  @db.VarChar(255)
+  created_at          DateTime @default(now()) @db.Timestamptz()
+
+  practice         Practice        @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+
+  @@map("blocked_dates")
+}
+
+model Appointment {
+  id                  String            @id @default(uuid()) @db.Uuid
+  practice_id         String            @db.Uuid
+  provider_profile_id String            @db.Uuid
+  patient_id          String            @db.Uuid
+  service_id          String            @db.Uuid
+  start_time          DateTime          @db.Timestamptz()
+  end_time            DateTime          @db.Timestamptz()
+  status              AppointmentStatus @default(PENDING)
+  consultation_type   ConsultationType
+  notes               String?           @db.Text
+  cancellation_reason String?           @db.Text
+  cancelled_by        String?           @db.Uuid
+  cancelled_at        DateTime?         @db.Timestamptz()
+  checked_in_at       DateTime?         @db.Timestamptz()
+  completed_at        DateTime?         @db.Timestamptz()
+  created_at          DateTime          @default(now()) @db.Timestamptz()
+  updated_at          DateTime          @updatedAt @db.Timestamptz()
+
+  practice         Practice        @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+  patient          User            @relation("PatientAppointments", fields: [patient_id], references: [id])
+  service          Service         @relation(fields: [service_id], references: [id])
+  cancelled_by_user User?          @relation("CancelledByUser", fields: [cancelled_by], references: [id])
+
+  video_room          VideoRoom?
+  intake_submission   IntakeSubmission?
+  messages            Message[]
+  payment_records     PaymentRecord[]
+  calendar_events     CalendarEvent[]
+  appointment_reminders AppointmentReminder[]
+
+  @@index([patient_id, start_time], name: "idx_appointments_patient")
+  @@index([practice_id, start_time], name: "idx_appointments_practice_date")
+  @@index([practice_id, status], name: "idx_appointments_status")
+  @@map("appointments")
+}
+
+model SlotReservation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  practice_id         String   @db.Uuid
+  provider_profile_id String   @db.Uuid
+  start_time          DateTime @db.Timestamptz()
+  end_time            DateTime @db.Timestamptz()
+  session_id          String   @db.VarChar(255)
+  expires_at          DateTime @db.Timestamptz()
+  created_at          DateTime @default(now()) @db.Timestamptz()
+
+  practice         Practice        @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider_profile_id, start_time])
+  @@map("slot_reservations")
+}
+
+model VideoRoom {
+  id                     String          @id @default(uuid()) @db.Uuid
+  practice_id            String          @db.Uuid
+  appointment_id         String          @unique @db.Uuid
+  twilio_room_sid        String?         @db.VarChar(255)
+  twilio_room_name       String?         @db.VarChar(255)
+  status                 VideoRoomStatus @default(CREATED)
+  max_participants       Int             @default(2)
+  started_at             DateTime?       @db.Timestamptz()
+  ended_at               DateTime?       @db.Timestamptz()
+  actual_duration_seconds Int?
+  created_at             DateTime        @default(now()) @db.Timestamptz()
+  updated_at             DateTime        @updatedAt @db.Timestamptz()
+
+  practice    Practice         @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  appointment Appointment      @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  participants VideoParticipant[]
+
+  @@map("video_rooms")
+}
+
+model VideoParticipant {
+  id                      String    @id @default(uuid()) @db.Uuid
+  video_room_id           String    @db.Uuid
+  user_id                 String    @db.Uuid
+  twilio_participant_sid  String?   @db.VarChar(255)
+  joined_at               DateTime? @db.Timestamptz()
+  left_at                 DateTime? @db.Timestamptz()
+  duration_seconds        Int?
+  created_at              DateTime  @default(now()) @db.Timestamptz()
+
+  video_room VideoRoom @relation(fields: [video_room_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id])
+
+  @@map("video_participants")
+}
+
+model IntakeFormTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  practice_id String   @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  fields      Json
+  is_system   Boolean  @default(false)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+  updated_at  DateTime @updatedAt @db.Timestamptz()
+
+  practice    Practice          @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  services    Service[]
+  submissions IntakeSubmission[]
+
+  @@map("intake_form_templates")
+}
+
+model IntakeSubmission {
+  id             String       @id @default(uuid()) @db.Uuid
+  practice_id    String       @db.Uuid
+  appointment_id String       @unique @db.Uuid
+  template_id    String       @db.Uuid
+  form_data      Json
+  status         IntakeStatus @default(PENDING)
+  completed_at   DateTime?    @db.Timestamptz()
+  created_at     DateTime     @default(now()) @db.Timestamptz()
+  updated_at     DateTime     @updatedAt @db.Timestamptz()
+
+  practice    Practice          @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  appointment Appointment       @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  template    IntakeFormTemplate @relation(fields: [template_id], references: [id])
+
+  @@map("intake_submissions")
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  practice_id    String      @db.Uuid
+  appointment_id String      @db.Uuid
+  sender_id      String?     @db.Uuid
+  type           MessageType @default(TEXT)
+  content        String      @db.Text
+  read_at        DateTime?   @db.Timestamptz()
+  created_at     DateTime    @default(now()) @db.Timestamptz()
+
+  practice    Practice    @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  sender      User?       @relation(fields: [sender_id], references: [id])
+
+  @@index([appointment_id, created_at], name: "idx_messages_appointment")
+  @@map("messages")
+}
+
+model PaymentRecord {
+  id                       String        @id @default(uuid()) @db.Uuid
+  practice_id              String        @db.Uuid
+  appointment_id           String        @db.Uuid
+  amount                   Decimal       @db.Decimal(10, 2)
+  currency                 String        @default("USD") @db.VarChar(3)
+  status                   PaymentStatus @default(PENDING)
+  stripe_payment_intent_id String?       @db.VarChar(255)
+  stripe_charge_id         String?       @db.VarChar(255)
+  platform_fee             Decimal?      @db.Decimal(10, 2)
+  refund_amount            Decimal?      @db.Decimal(10, 2)
+  refunded_at              DateTime?     @db.Timestamptz()
+  metadata                 Json?
+  created_at               DateTime      @default(now()) @db.Timestamptz()
+  updated_at               DateTime      @updatedAt @db.Timestamptz()
+
+  practice    Practice    @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+
+  @@map("payment_records")
+}
+
+model CalendarConnection {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  practice_id         String                   @db.Uuid
+  provider_profile_id String                   @db.Uuid
+  provider            CalendarProvider
+  access_token        String                   @db.Text
+  refresh_token       String                   @db.Text
+  token_expires_at    DateTime                 @db.Timestamptz()
+  calendar_id         String?                  @db.VarChar(255)
+  status              CalendarConnectionStatus @default(ACTIVE)
+  last_synced_at      DateTime?                @db.Timestamptz()
+  created_at          DateTime                 @default(now()) @db.Timestamptz()
+  updated_at          DateTime                 @updatedAt @db.Timestamptz()
+
+  practice         Practice        @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  provider_profile ProviderProfile @relation(fields: [provider_profile_id], references: [id], onDelete: Cascade)
+  calendar_events  CalendarEvent[]
+
+  @@map("calendar_connections")
+}
+
+model CalendarEvent {
+  id                     String                @id @default(uuid()) @db.Uuid
+  practice_id            String                @db.Uuid
+  calendar_connection_id String                @db.Uuid
+  appointment_id         String?               @db.Uuid
+  external_event_id      String                @db.VarChar(255)
+  direction              CalendarEventDirection
+  title                  String                @db.VarChar(255)
+  start_time             DateTime              @db.Timestamptz()
+  end_time               DateTime              @db.Timestamptz()
+  created_at             DateTime              @default(now()) @db.Timestamptz()
+  updated_at             DateTime              @updatedAt @db.Timestamptz()
+
+  practice            Practice           @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  calendar_connection CalendarConnection @relation(fields: [calendar_connection_id], references: [id], onDelete: Cascade)
+  appointment         Appointment?       @relation(fields: [appointment_id], references: [id])
+
+  @@unique([calendar_connection_id, external_event_id])
+  @@index([calendar_connection_id, direction], name: "idx_calendar_events_connection")
+  @@map("calendar_events")
+}
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  practice_id String?  @db.Uuid
+  type        String   @db.VarChar(50)
+  title       String   @db.VarChar(255)
+  body        String   @db.Text
+  data        Json?
+  read_at     DateTime? @db.Timestamptz()
+  created_at  DateTime  @default(now()) @db.Timestamptz()
+
+  user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  practice Practice? @relation(fields: [practice_id], references: [id])
+
+  @@map("notifications")
+}
+
+model AppointmentReminder {
+  id             String   @id @default(uuid()) @db.Uuid
+  practice_id    String   @db.Uuid
+  appointment_id String   @db.Uuid
+  type           String   @db.VarChar(20)
+  scheduled_for  DateTime @db.Timestamptz()
+  sent_at        DateTime? @db.Timestamptz()
+  failed_at      DateTime? @db.Timestamptz()
+  retry_count    Int       @default(0)
+  created_at     DateTime  @default(now()) @db.Timestamptz()
+
+  practice    Practice    @relation(fields: [practice_id], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+
+  @@map("appointment_reminders")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  user_id       String?  @db.Uuid
+  practice_id   String?  @db.Uuid
+  action        String   @db.VarChar(50)
+  resource_type String   @db.VarChar(50)
+  resource_id   String   @db.Uuid
+  metadata      Json?
+  ip_address    String?  @db.VarChar(45)
+  created_at    DateTime @default(now()) @db.Timestamptz()
+
+  user     User?     @relation(fields: [user_id], references: [id])
+  practice Practice? @relation(fields: [practice_id], references: [id])
+
+  @@index([resource_type, resource_id])
+  @@index([user_id, created_at])
+  @@map("audit_logs")
+}
+
+model ConsentRecord {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  type         String    @db.VarChar(50)
+  version      String    @db.VarChar(20)
+  consented_at DateTime  @db.Timestamptz()
+  ip_address   String?   @db.VarChar(45)
+  user_agent   String?   @db.Text
+  revoked_at   DateTime? @db.Timestamptz()
+  created_at   DateTime  @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("consent_records")
+}
